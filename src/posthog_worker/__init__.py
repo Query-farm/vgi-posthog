@@ -1,0 +1,1 @@
+"""VGI posthog worker package."""

@@ -4,13 +4,10 @@
 # contract with `vgi-lint spec`.
 
 # The worker to attach, relative to this directory. Build it first with `make build`.
-location = ".venv/bin/vgi-starter-worker"
+location = ".venv/bin/vgi-posthog-worker"
 
-# template-only:start
+# Gate at info: zero findings of any severity.
 fail_on = "info"
-# template-only:end
-# Fail on warnings while you build. Raise this to "info" before you publish the worker.
-# fork-only: fail_on = "warning"
 
 # Waive a finding only with a kind and a reason, so the waiver can be audited:
 #   domain-exemption  permanent and legitimate for this worker
@@ -25,3 +22,36 @@ ignore = [
 #   vgi-lint lint --baseline vgi-lint-baseline --update-baseline
 # and uncomment the next line. Only new findings fail after that.
 # baseline = "vgi-lint-baseline"
+
+# hogql() learns its output columns by asking PostHog (a LIMIT 0 probe of the query) when the
+# query is bound, so its examples cannot bind without a `posthog` secret and a reachable PostHog.
+# test/sql/posthog.test runs it against the HogQL-evaluating mock instead.
+[per_object."posthog.main.hogql"]
+ignore = [{ code = "VGI901", kind = "domain-exemption", reason = "output schema comes from PostHog at bind time; needs a posthog secret" }]
+
+# VGI808/VGI809 ask for foreign keys on person_id / session_id / distinct_id / insight_id. DuckDB
+# accepts only ENFORCED + ALL_ROWS constraint records, and PostHog keeps events, sessions and
+# annotations whose person, distinct id, session or insight was deleted or merged away, so no
+# foreign key can be attested. The joins are documented in each table's doc_llm instead.
+[per_object."posthog.main.events"]
+ignore = [
+  { code = "VGI808", kind = "domain-exemption", reason = "events outlive deleted/merged persons and sessions; FK cannot be ENFORCED" },
+  { code = "VGI809", kind = "domain-exemption", reason = "distinct ids of deleted persons stay on events; FK cannot be ENFORCED" },
+]
+[per_object."posthog.main.person_distinct_ids"]
+ignore = [
+  { code = "VGI808", kind = "domain-exemption", reason = "distinct ids can point at persons deleted since; FK cannot be ENFORCED" },
+  { code = "VGI809", kind = "domain-exemption", reason = "distinct_id is this table's own primary key" },
+]
+[per_object."posthog.main.sessions"]
+ignore = [
+  { code = "VGI808", kind = "tooling-bug", reason = "session_id is this table's own primary key, not a reference to it" },
+  { code = "VGI809", kind = "domain-exemption", reason = "a session's distinct id can belong to a deleted person; FK cannot be ENFORCED" },
+]
+[per_object."posthog.metadata.annotations"]
+ignore = [{ code = "VGI808", kind = "domain-exemption", reason = "annotations keep the id of insights deleted since; FK cannot be ENFORCED" }]
+
+# `id` is PostHog's own primary key on every resource: a numeric id on most REST resources but a
+# UUID on persons, definitions and surveys. They are never joined to each other.
+[options]
+type_consistency_ignore_names = ["id"]

@@ -1,16 +1,80 @@
 # Private graders for the public vgi.agent_test_tasks in the worker's catalog metadata.
-# `vgi-lint lint --ai` runs an agent on each prompt and grades it with check_sql.
+# `vgi-lint lint --ai` runs an agent on each prompt and grades it against reference_sql.
 # See https://github.com/Query-farm/vgi-lint-check (VGI920).
+#
+# Credential-gated: every task needs a `posthog` secret. The data is the fixture project
+# (test/fixtures/posthog.json served by test/mock_api/server.py), which never changes, so
+# reference results are deterministic. Run --ai against the mock with
+#   CREATE SECRET (TYPE posthog, PERSONAL_API_KEY 'phx_fixture_key', PROJECT_ID '4242',
+#                  HOST 'http://127.0.0.1:<mock port>');
 tasks:
-  - name: formal_greeting
-    reference_sql: SELECT starter.main.greet('Grace', 'formal') AS greeting
-  - name: sum_of_squares
-    reference_sql: SELECT sum(squared) AS total FROM starter.main.sequence_table(10)
-  - name: stepped_sequence
-    reference_sql: SELECT n FROM starter.main.sequence_table(4, step := 5) ORDER BY n
-  # Reads the public demo API (https://vgi-starter-api.query-farm.services/v1).
-  - name: items_per_category
-    check_sql: >-
-      SELECT count(*) = 3 AND sum(items) = 25
-      FROM (SELECT category, count(*) AS items
-            FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1') GROUP BY category)
+  - name: top_events
+    reference_sql: >-
+      SELECT event, count(*) AS n FROM posthog.main.events
+      WHERE timestamp >= TIMESTAMPTZ '2026-11-01 00:00:00+00' AND timestamp < TIMESTAMPTZ '2026-11-02 00:00:00+00'
+      GROUP BY event ORDER BY event
+    unordered: true
+  - name: pro_purchases
+    reference_sql: >-
+      SELECT count(*) AS purchases, sum((properties->>'amount')::DOUBLE) AS amount
+      FROM posthog.main.events_where(event := 'purchase', properties := '{"plan": "pro"}')
+  - name: active_flags
+    reference_sql: >-
+      SELECT key, conditions[1].rollout_percentage AS rollout FROM posthog.metadata.feature_flags
+      WHERE active AND NOT deleted ORDER BY key
+    unordered: true
+  - name: bounce_sessions
+    reference_sql: SELECT session_id, entry_current_url FROM posthog.main.sessions WHERE is_bounce
+    unordered: true
+  - name: purchases_by_email
+    reference_sql: >-
+      SELECT p.properties->>'email' AS email, count(*) AS purchases
+      FROM posthog.main.events e JOIN posthog.main.persons p ON p.id = e.person_id
+      WHERE e.event = 'purchase' GROUP BY email
+    unordered: true
+  - name: merged_identities
+    reference_sql: >-
+      SELECT person_id, count(*) AS ids FROM posthog.main.person_distinct_ids GROUP BY person_id HAVING count(*) > 1
+    unordered: true
+  - name: company_seats
+    reference_sql: >-
+      SELECT g.group_key, (g.properties->>'seats')::INT AS seats
+      FROM posthog.main.groups g JOIN posthog.metadata.group_types t USING (group_type_index)
+      WHERE t.group_type = 'company'
+    unordered: true
+  - name: hogql_event_count
+    reference_sql: SELECT n FROM posthog.main.hogql('SELECT count() AS n FROM events')
+  - name: project_timezones
+    reference_sql: SELECT name, timezone FROM posthog.metadata.projects
+    unordered: true
+  - name: numeric_properties
+    reference_sql: >-
+      SELECT name FROM posthog.metadata.property_definitions WHERE definition_type = 'event' AND is_numerical
+    unordered: true
+  - name: verified_volume
+    reference_sql: SELECT sum(volume_30_day) AS volume FROM posthog.metadata.event_definitions WHERE verified
+  - name: action_steps
+    reference_sql: SELECT name, len(steps) AS steps FROM posthog.metadata.actions
+    unordered: true
+  - name: largest_cohort
+    reference_sql: SELECT name FROM posthog.metadata.cohorts ORDER BY count DESC NULLS LAST LIMIT 1
+  - name: running_experiments
+    reference_sql: >-
+      SELECT name, feature_flag_key FROM posthog.metadata.experiments
+      WHERE start_date IS NOT NULL AND end_date IS NULL AND NOT archived
+    unordered: true
+  - name: survey_questions
+    reference_sql: SELECT name, question_count FROM posthog.metadata.surveys
+    unordered: true
+  - name: dashboard_insights
+    reference_sql: >-
+      SELECT d.name, count(*) AS insights
+      FROM posthog.metadata.insights i, unnest(i.dashboard_ids) AS u(dashboard_id)
+      JOIN posthog.metadata.dashboards d ON d.id = u.dashboard_id
+      WHERE i.saved AND NOT i.deleted GROUP BY d.name
+    unordered: true
+  - name: deploy_annotations
+    reference_sql: SELECT content FROM posthog.metadata.annotations WHERE creation_type = 'GIT'
+    unordered: true
+  - name: array_type
+    reference_sql: SELECT posthog.main.clickhouse_type_to_duckdb('Array(String)') AS duckdb_type

@@ -1,0 +1,181 @@
+# name: test/sql/pushdown.test
+# description: SQL predicates, projections and Top-N limits reach PostHog as HogQL with placeholder values (checked in the mock's request log)
+# group: [posthog]
+
+require vgi
+
+require-env POSTHOG_WORKER
+
+require-env POSTHOG_MOCK_API
+
+# The mock's request log is read with read_json over HTTP.
+statement ok
+LOAD httpfs;
+
+statement ok
+LOAD json;
+
+statement ok
+ATTACH 'posthog' (TYPE vgi, LOCATION '{POSTHOG_WORKER}');
+
+statement ok
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_fixture_key', PROJECT_ID '4242', HOST '{POSTHOG_MOCK_API}', PAGE_SIZE 4);
+
+statement ok
+CREATE MACRO last_hogql(marker) AS (
+  SELECT hogql FROM read_json('{POSTHOG_MOCK_API}/__requests', columns = {'seq': 'BIGINT', 'hogql': 'VARCHAR', 'values': 'VARCHAR', 'status': 'BIGINT'})
+  WHERE status = 200 AND hogql LIKE '%' || marker || '%' ORDER BY seq DESC LIMIT 1
+);
+
+statement ok
+CREATE MACRO last_values(marker) AS (
+  SELECT "values" FROM read_json('{POSTHOG_MOCK_API}/__requests', columns = {'seq': 'BIGINT', 'hogql': 'VARCHAR', 'values': 'VARCHAR', 'status': 'BIGINT'})
+  WHERE status = 200 AND hogql LIKE '%' || marker || '%' ORDER BY seq DESC LIMIT 1
+);
+
+# event =, timestamp range, distinct_id IN: all in the HogQL WHERE, values as placeholders,
+# only the needed columns (plus the keyset key) selected.
+query I
+SELECT count(*) FROM posthog.main.events WHERE event = 'purchase' AND timestamp >= TIMESTAMPTZ '2026-11-02 00:00:00+00' AND timestamp < TIMESTAMPTZ '2026-11-04 00:00:00+00' AND distinct_id IN ('user-2', 'user-3');
+----
+2
+
+query T
+SELECT last_hogql('FROM events WHERE event = ');
+----
+SELECT event, timestamp, distinct_id, uuid FROM events WHERE event = {vgi_p0} AND timestamp >= toDateTime({vgi_p1}) AND timestamp < toDateTime({vgi_p2}) AND distinct_id IN ({vgi_p3}, {vgi_p4}) ORDER BY timestamp, uuid LIMIT 4
+
+query T
+SELECT last_values('FROM events WHERE event = ');
+----
+{"vgi_p0": "purchase", "vgi_p1": "2026-11-02 00:00:00.000000", "vgi_p2": "2026-11-04 00:00:00.000000", "vgi_p3": "user-2", "vgi_p4": "user-3"}
+
+# A quote in a constant never reaches the HogQL text.
+query I
+SELECT count(*) FROM posthog.main.events WHERE current_url = 'https://shop.example/blog/o''reilly';
+----
+1
+
+query T
+SELECT last_hogql('properties.$current_url = ');
+----
+SELECT properties.$current_url, timestamp, uuid FROM events WHERE properties.$current_url = {vgi_p0} ORDER BY timestamp, uuid LIMIT 4
+
+# person_id / uuid compare as text, so any string is a valid operand.
+query I
+SELECT count(*) FROM posthog.main.events WHERE person_id = '01890000-0000-7000-8000-000000000003' OR person_id = 'not-a-uuid';
+----
+2
+
+query T
+SELECT last_hogql('toString(person_id)');
+----
+SELECT person_id, timestamp, uuid FROM events WHERE (toString(person_id) = {vgi_p0} OR toString(person_id) = {vgi_p1}) ORDER BY timestamp, uuid LIMIT 4
+
+# The second page carries the keyset cursor (timestamp, uuid) instead of an OFFSET.
+query I
+SELECT count(*) FROM posthog.main.events WHERE distinct_id = 'user-1';
+----
+4
+
+query T
+SELECT last_hogql('distinct_id = {vgi_p0} AND (timestamp > toDateTime');
+----
+SELECT distinct_id, timestamp, uuid FROM events WHERE distinct_id = {vgi_p0} AND (timestamp > toDateTime({vgi_p1}) OR (timestamp = toDateTime({vgi_p2}) AND uuid > toUUID({vgi_p3}))) ORDER BY timestamp, uuid LIMIT 4
+
+# Top-N with no WHERE: one ORDER BY ... LIMIT (limit + offset) query.
+query T
+SELECT event FROM posthog.main.events ORDER BY created_at DESC LIMIT 1 OFFSET 2;
+----
+purchase
+
+query T
+SELECT last_hogql('ORDER BY created_at DESC');
+----
+SELECT event, created_at FROM events ORDER BY created_at DESC NULLS LAST LIMIT 3
+
+# JSON property predicates are not pushed (DuckDB applies them); events_where pushes them with the cap.
+query I
+SELECT count(*) FROM posthog.main.events_where(event := 'purchase', properties := '{"plan": "pro", "$browser": "Chrome"}', max_rows := 10);
+----
+0
+
+query T
+SELECT last_hogql('properties.plan = ');
+----
+SELECT uuid, timestamp FROM events WHERE event = {vgi_p0} AND properties.plan = {vgi_p1} AND properties.$browser = {vgi_p2} ORDER BY timestamp, uuid LIMIT 4
+
+query T
+SELECT uuid FROM posthog.main.events_where(newest_first := true, max_rows := 1, distinct_id := 'user-2');
+----
+0193a000-0000-7000-8000-000000000010
+
+query T
+SELECT last_hogql('ORDER BY timestamp DESC, uuid DESC');
+----
+SELECT uuid, timestamp FROM events WHERE distinct_id = {vgi_p0} ORDER BY timestamp DESC, uuid DESC LIMIT 1
+
+# Session and group predicates.
+query I
+SELECT count(*) FROM posthog.main.sessions WHERE channel_type = 'Direct' AND NOT is_bounce;
+----
+1
+
+query T
+SELECT last_hogql('FROM sessions WHERE');
+----
+SELECT $channel_type, $is_bounce, session_id FROM sessions WHERE $channel_type = {vgi_p0} AND $is_bounce = {vgi_p1} ORDER BY session_id LIMIT 4
+
+query I
+SELECT count(*) FROM posthog.main.groups WHERE group_type_index = 0 AND group_key >= 'b';
+----
+1
+
+query T
+SELECT last_hogql('FROM groups WHERE');
+----
+SELECT `index`, `key` FROM groups WHERE `index` = {vgi_p0} AND `key` >= {vgi_p1} ORDER BY `index`, `key` LIMIT 4
+
+# hogql(): projection, predicates and the Top-N hint wrap the user's query.
+query T
+SELECT distinct_id FROM posthog.main.hogql('SELECT distinct_id, event, timestamp FROM events') ORDER BY timestamp DESC LIMIT 1;
+----
+user-3
+
+query T
+SELECT last_hogql('FROM (SELECT distinct_id, event, timestamp FROM events)');
+----
+SELECT distinct_id, timestamp FROM (SELECT distinct_id, event, timestamp FROM events) ORDER BY timestamp DESC NULLS LAST LIMIT 1
+
+query I
+SELECT count(*) FROM posthog.main.hogql('SELECT event, timestamp FROM events') WHERE event IN ('signed_up', 'purchase') AND timestamp < TIMESTAMPTZ '2026-11-02 00:00:00+00';
+----
+2
+
+query T
+SELECT last_hogql('FROM (SELECT event, timestamp FROM events) WHERE');
+----
+SELECT event, timestamp FROM (SELECT event, timestamp FROM events) WHERE event IN ({vgi_p0}, {vgi_p1}) AND timestamp < toDateTime({vgi_p2}) LIMIT 50000
+
+# A column whose name is not a plain identifier is read with * and filtered locally.
+query I
+SELECT "count()" FROM posthog.main.hogql('SELECT count() FROM events');
+----
+12
+
+query T
+SELECT last_hogql('FROM (SELECT count() FROM events)');
+----
+SELECT * FROM (SELECT count() FROM events) LIMIT 50000
+
+# No request ever used OFFSET.
+query I
+SELECT count(*) FROM read_json('{POSTHOG_MOCK_API}/__requests', columns = {'hogql': 'VARCHAR', 'status': 'BIGINT'}) WHERE status = 200 AND hogql ILIKE '%OFFSET%';
+----
+0
+
+# The 429 the mock sends first was retried (Retry-After honoured), then succeeded.
+query I
+SELECT count(*) > 0 FROM read_json('{POSTHOG_MOCK_API}/__requests', columns = {'status': 'BIGINT'}) WHERE status = 429;
+----
+true

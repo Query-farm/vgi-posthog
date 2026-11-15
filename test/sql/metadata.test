@@ -1,0 +1,163 @@
+# name: test/sql/metadata.test
+# description: PostHog REST resources (metadata schema) through DuckDB; paging, foreign next links, no secrets exposed
+# group: [posthog]
+
+require vgi
+
+require-env POSTHOG_WORKER
+
+require-env POSTHOG_MOCK_API
+
+statement ok
+LOAD json;
+
+statement ok
+ATTACH 'posthog' (TYPE vgi, LOCATION '{POSTHOG_WORKER}');
+
+# projects needs no PROJECT_ID; every other table does.
+statement ok
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_fixture_key', HOST '{POSTHOG_MOCK_API}');
+
+query ITTT
+SELECT id, name, timezone, is_demo FROM posthog.metadata.projects ORDER BY id;
+----
+4242	Fixture Shop	UTC	false
+4243	Fixture Staging	Europe/Berlin	false
+4244	Hedgebox demo	UTC	true
+
+# The project API token is not a column, so it cannot leak.
+query I
+SELECT count(*) FROM (DESCRIBE posthog.metadata.projects) WHERE column_name ILIKE '%token%';
+----
+0
+
+statement error
+SELECT * FROM posthog.metadata.cohorts;
+----
+<REGEX>:.*PROJECT_ID is required.*
+
+statement ok
+DROP SECRET ph;
+
+statement ok
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_fixture_key', PROJECT_ID '4242', HOST '{POSTHOG_MOCK_API}');
+
+# The mock pages two items at a time and returns cohorts' next links on another host;
+# the worker rebases them onto HOST and still reads every page.
+query ITIT
+SELECT id, name, count, is_static FROM posthog.metadata.cohorts ORDER BY id;
+----
+11	Pro users	2	false
+12	Beta testers	15	true
+13	Churn risk	NULL	false
+
+query TT
+SELECT created_by, json_extract_string(query, '$.kind') FROM posthog.metadata.cohorts WHERE id = 13 OR id = 11 ORDER BY id;
+----
+ada@example.com	NULL
+NULL	HogQLQuery
+
+query TRTTT
+SELECT key, rollout_percentage, is_multivariate, has_payloads, experiment_ids::VARCHAR FROM posthog.metadata.feature_flags ORDER BY id;
+----
+new-checkout	50.0	false	true	[31]
+pricing-test	100.0	true	false	[]
+old-banner	NULL	false	false	[]
+
+query TTR
+SELECT f.key, v.key, v.rollout_percentage FROM posthog.metadata.feature_flags f, unnest(f.variants) AS u(v) ORDER BY f.key, v.key;
+----
+pricing-test	control	50.0
+pricing-test	test	50.0
+
+query TRT
+SELECT f.key, c.rollout_percentage, c.properties FROM posthog.metadata.feature_flags f, unnest(f.conditions) AS u(c) WHERE f.key = 'new-checkout' ORDER BY c.rollout_percentage DESC;
+----
+new-checkout	50.0	[{"key": "plan", "type": "person", "value": ["pro"]}]
+new-checkout	10.0	[]
+
+# Payloads (which can hold secrets) never appear in any column.
+query I
+SELECT count(*) FROM posthog.metadata.feature_flags f WHERE f::VARCHAR LIKE '%FIXTURE_PAYLOAD%';
+----
+0
+
+query TTTT
+SELECT e.name, e.feature_flag_key, f.key, e.end_date IS NULL FROM posthog.metadata.experiments e LEFT JOIN posthog.metadata.feature_flags f ON f.key = e.feature_flag_key ORDER BY e.id;
+----
+Checkout redesign	new-checkout	new-checkout	true
+Hero copy	hero-copy	NULL	true
+
+query TTI
+SELECT name, linked_flag_key, question_count FROM posthog.metadata.surveys ORDER BY name;
+----
+Exit survey	NULL	1
+NPS	new-checkout	2
+
+query ITT
+SELECT id, query_kind, dashboard_ids::VARCHAR FROM posthog.metadata.insights ORDER BY id;
+----
+41	TrendsQuery	[51]
+42	FunnelsQuery	[51, 52]
+43	HogQLQuery	[]
+
+query TI
+SELECT d.name, count(*) FROM posthog.metadata.insights i, unnest(i.dashboard_ids) AS u(dashboard_id) JOIN posthog.metadata.dashboards d ON d.id = u.dashboard_id GROUP BY d.name ORDER BY d.name;
+----
+Growth	2
+Revenue	1
+
+query TTI
+SELECT content, creation_type, insight_id FROM posthog.metadata.annotations ORDER BY date_marker;
+----
+Launched new checkout	USR	NULL
+Deploy v2.3	GIT	41
+
+query TTT
+SELECT a.name, s.event, s.selector FROM posthog.metadata.actions a, unnest(a.steps) AS u(s) ORDER BY a.name, s.event;
+----
+Clicked buy	$autocapture	button.buy
+Clicked buy	purchase	NULL
+Viewed pricing	$pageview	NULL
+
+query TIT
+SELECT name, volume_30_day, verified FROM posthog.metadata.event_definitions ORDER BY volume_30_day DESC NULLS LAST;
+----
+$pageview	5400	true
+$autocapture	2100	false
+signed_up	210	true
+purchase	95	true
+legacy_click	NULL	false
+
+query TTI
+SELECT name, definition_type, group_type_index FROM posthog.metadata.property_definitions WHERE is_numerical ORDER BY name;
+----
+$session_duration	session	NULL
+amount	event	NULL
+seats	group	0
+
+query ITT
+SELECT group_type_index, group_type, name_plural FROM posthog.metadata.group_types ORDER BY 1;
+----
+0	company	Companies
+1	team	NULL
+
+# Group names via group_types.
+query TT
+SELECT t.group_type, g.group_key FROM posthog.main.groups g JOIN posthog.metadata.group_types t USING (group_type_index) ORDER BY 1, 2;
+----
+company	acme
+company	globex
+team	team-a
+
+# A wrong key surfaces PostHog's 401 with a hint.
+statement ok
+DROP SECRET ph;
+
+statement ok
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_wrong', PROJECT_ID '4242', HOST '{POSTHOG_MOCK_API}');
+
+statement error
+SELECT * FROM posthog.metadata.dashboards;
+----
+<REGEX>:.*HTTP 401.*PERSONAL_API_KEY.*

@@ -1,0 +1,1120 @@
+{
+ "hogql_tables": {
+  "events": {
+   "columns": [
+    "uuid",
+    "event",
+    "timestamp",
+    "distinct_id",
+    "person_id",
+    "properties",
+    "elements_chain",
+    "created_at"
+   ],
+   "rows": [
+    [
+     "0193a000-0000-7000-8000-000000000001",
+     "$pageview",
+     "2026-11-01T09:00:00.000000Z",
+     "anon-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "$browser": "Chrome",
+      "$session_id": "0192d000-0000-7000-8000-000000000001",
+      "$current_url": "https://shop.example/"
+     },
+     "",
+     "2026-11-01T09:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000002",
+     "$pageview",
+     "2026-11-01T09:00:05.000000Z",
+     "anon-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "$browser": "Chrome",
+      "$session_id": "0192d000-0000-7000-8000-000000000001",
+      "$current_url": "https://shop.example/pricing"
+     },
+     "",
+     "2026-11-01T09:00:05.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000003",
+     "$autocapture",
+     "2026-11-01T09:00:07.500000Z",
+     "anon-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "$browser": "Chrome",
+      "$event_type": "click",
+      "$session_id": "0192d000-0000-7000-8000-000000000001",
+      "$current_url": "https://shop.example/pricing"
+     },
+     "a:nth-child=\"1\"",
+     "2026-11-01T09:00:07.500000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000004",
+     "signed_up",
+     "2026-11-01T09:01:00.000000Z",
+     "user-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "plan": "pro",
+      "is_trial": true,
+      "utm source": "newsletter",
+      "$session_id": "0192d000-0000-7000-8000-000000000001",
+      "$current_url": "https://shop.example/signup"
+     },
+     "",
+     "2026-11-01T09:01:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000005",
+     "$pageview",
+     "2026-11-01T12:00:00.000000Z",
+     "user-2",
+     "01890000-0000-7000-8000-000000000002",
+     {
+      "$browser": "Firefox",
+      "$session_id": "0192d000-0000-7000-8000-000000000002",
+      "$current_url": "https://shop.example/"
+     },
+     "",
+     "2026-11-01T12:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000006",
+     "signed_up",
+     "2026-11-01T12:02:00.000000Z",
+     "user-2",
+     "01890000-0000-7000-8000-000000000002",
+     {
+      "plan": "free",
+      "is_trial": false,
+      "$session_id": "0192d000-0000-7000-8000-000000000002",
+      "$current_url": "https://shop.example/signup"
+     },
+     "",
+     "2026-11-01T12:02:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000007",
+     "purchase",
+     "2026-11-02T10:00:00.000000Z",
+     "user-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "plan": "pro",
+      "amount": 49,
+      "$session_id": "0192d000-0000-7000-8000-000000000003",
+      "$current_url": "https://shop.example/checkout"
+     },
+     "",
+     "2026-11-02T10:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000008",
+     "$pageview",
+     "2026-11-02T10:00:00.000000Z",
+     "user-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "$browser": "Chrome",
+      "$session_id": "0192d000-0000-7000-8000-000000000003",
+      "$current_url": "https://shop.example/thanks"
+     },
+     "",
+     "2026-11-02T10:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000009",
+     "$autocapture",
+     "2026-11-02T10:00:00.000000Z",
+     "user-1",
+     "01890000-0000-7000-8000-000000000001",
+     {
+      "$event_type": "click",
+      "$session_id": "0192d000-0000-7000-8000-000000000003",
+      "$current_url": "https://shop.example/thanks"
+     },
+     "a:nth-child=\"1\"",
+     "2026-11-02T10:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000010",
+     "purchase",
+     "2026-11-02T15:30:00.250000Z",
+     "user-2",
+     "01890000-0000-7000-8000-000000000002",
+     {
+      "plan": "free",
+      "amount": 9.5
+     },
+     "",
+     "2026-11-02T15:30:00.250000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000011",
+     "$pageview",
+     "2026-11-03T08:00:00.000000Z",
+     "user-3",
+     "01890000-0000-7000-8000-000000000003",
+     {
+      "$browser": "Safari",
+      "plan": "pro' OR 1=1 --",
+      "$session_id": "0192d000-0000-7000-8000-000000000004",
+      "$current_url": "https://shop.example/blog/o'reilly"
+     },
+     "",
+     "2026-11-03T08:00:00.900000Z"
+    ],
+    [
+     "0193a000-0000-7000-8000-000000000012",
+     "purchase",
+     "2026-11-03T08:10:00.000000Z",
+     "user-3",
+     "01890000-0000-7000-8000-000000000003",
+     {
+      "plan": "pro",
+      "amount": 99,
+      "$session_id": "0192d000-0000-7000-8000-000000000004",
+      "$current_url": "https://shop.example/checkout"
+     },
+     "",
+     "2026-11-03T08:10:00.900000Z"
+    ]
+   ]
+  },
+  "persons": {
+   "columns": [
+    "id",
+    "created_at",
+    "is_identified",
+    "properties"
+   ],
+   "rows": [
+    [
+     "01890000-0000-7000-8000-000000000001",
+     "2026-11-01T09:00:00.000000Z",
+     true,
+     {
+      "email": "ada@example.com",
+      "plan": "pro"
+     }
+    ],
+    [
+     "01890000-0000-7000-8000-000000000002",
+     "2026-11-01T12:00:00.000000Z",
+     true,
+     {
+      "email": "grace@example.com",
+      "plan": "free"
+     }
+    ],
+    [
+     "01890000-0000-7000-8000-000000000003",
+     "2026-11-03T08:00:00.000000Z",
+     false,
+     {
+      "plan": "pro"
+     }
+    ]
+   ]
+  },
+  "person_distinct_ids": {
+   "columns": [
+    "distinct_id",
+    "person_id"
+   ],
+   "rows": [
+    [
+     "anon-1",
+     "01890000-0000-7000-8000-000000000001"
+    ],
+    [
+     "user-1",
+     "01890000-0000-7000-8000-000000000001"
+    ],
+    [
+     "user-2",
+     "01890000-0000-7000-8000-000000000002"
+    ],
+    [
+     "user-3",
+     "01890000-0000-7000-8000-000000000003"
+    ]
+   ]
+  },
+  "sessions": {
+   "columns": [
+    "session_id",
+    "distinct_id",
+    "$start_timestamp",
+    "$end_timestamp",
+    "$session_duration",
+    "$entry_current_url",
+    "$exit_current_url",
+    "$entry_referring_domain",
+    "$entry_utm_source",
+    "$entry_utm_medium",
+    "$entry_utm_campaign",
+    "$channel_type",
+    "$pageview_count",
+    "$autocapture_count",
+    "$is_bounce"
+   ],
+   "rows": [
+    [
+     "0192d000-0000-7000-8000-000000000001",
+     "anon-1",
+     "2026-11-01T09:00:00.000000Z",
+     "2026-11-01T09:01:00.000000Z",
+     60,
+     "https://shop.example/",
+     "https://shop.example/signup",
+     "news.example",
+     "newsletter",
+     "email",
+     "launch",
+     "Email",
+     2,
+     1,
+     false
+    ],
+    [
+     "0192d000-0000-7000-8000-000000000002",
+     "user-2",
+     "2026-11-01T12:00:00.000000Z",
+     "2026-11-01T12:02:00.000000Z",
+     120,
+     "https://shop.example/",
+     "https://shop.example/signup",
+     "$direct",
+     null,
+     null,
+     null,
+     "Direct",
+     1,
+     0,
+     false
+    ],
+    [
+     "0192d000-0000-7000-8000-000000000003",
+     "user-1",
+     "2026-11-02T10:00:00.000000Z",
+     "2026-11-02T10:00:00.000000Z",
+     0,
+     "https://shop.example/thanks",
+     "https://shop.example/thanks",
+     "$direct",
+     null,
+     null,
+     null,
+     "Direct",
+     1,
+     1,
+     true
+    ],
+    [
+     "0192d000-0000-7000-8000-000000000004",
+     "user-3",
+     "2026-11-03T08:00:00.000000Z",
+     "2026-11-03T08:10:00.000000Z",
+     600,
+     "https://shop.example/blog/o'reilly",
+     "https://shop.example/checkout",
+     "www.google.com",
+     null,
+     null,
+     null,
+     "Organic Search",
+     1,
+     0,
+     false
+    ]
+   ]
+  },
+  "groups": {
+   "columns": [
+    "index",
+    "key",
+    "created_at",
+    "properties"
+   ],
+   "rows": [
+    [
+     0,
+     "acme",
+     "2026-10-01T00:00:00.000000Z",
+     {
+      "name": "Acme Corp",
+      "seats": 40
+     }
+    ],
+    [
+     0,
+     "globex",
+     "2026-10-05T00:00:00.000000Z",
+     {
+      "name": "Globex",
+      "seats": 12
+     }
+    ],
+    [
+     1,
+     "team-a",
+     "2026-10-07T00:00:00.000000Z",
+     {
+      "name": "Team A"
+     }
+    ]
+   ]
+  }
+ },
+ "canned": [
+  {
+   "query": "SELECT * FROM fixture_types",
+   "types": [
+    [
+     "tags",
+     "Array(String)"
+    ],
+    [
+     "attrs",
+     "Map(String, String)"
+    ],
+    [
+     "pair",
+     "Tuple(label String, rank UInt8)"
+    ],
+    [
+     "amount",
+     "Decimal(18, 4)"
+    ],
+    [
+     "happened_at",
+     "Nullable(DateTime64(6, 'UTC'))"
+    ],
+    [
+     "day",
+     "Date"
+    ],
+    [
+     "flag",
+     "Bool"
+    ],
+    [
+     "n",
+     "UInt64"
+    ],
+    [
+     "ratio",
+     "Float64"
+    ],
+    [
+     "lc",
+     "LowCardinality(String)"
+    ],
+    [
+     "maybe",
+     "Nullable(Int64)"
+    ],
+    [
+     "uid",
+     "UUID"
+    ]
+   ],
+   "results": [
+    [
+     [
+      "a",
+      "b"
+     ],
+     {
+      "k": "v"
+     },
+     [
+      "first",
+      1
+     ],
+     "12.5000",
+     "2026-11-02T09:30:00.250000-05:00",
+     "2026-11-02",
+     true,
+     18446744073709551615,
+     0.25,
+     "web",
+     null,
+     "01890000-0000-7000-8000-000000000001"
+    ],
+    [
+     [],
+     {},
+     [
+      "second",
+      2
+     ],
+     "-0.0001",
+     null,
+     "2026-11-03",
+     false,
+     7,
+     -1.5,
+     "mobile",
+     42,
+     "01890000-0000-7000-8000-000000000002"
+    ]
+   ]
+  }
+ ],
+ "rest": {
+  "projects": [
+   {
+    "id": 4242,
+    "uuid": "0188aaaa-0000-0000-0000-000000004242",
+    "name": "Fixture Shop",
+    "organization": "0188bbbb-0000-0000-0000-000000000001",
+    "api_token": "phc_PROJECT_TOKEN_MUST_NOT_LEAK",
+    "timezone": "UTC",
+    "is_demo": false,
+    "ingested_event": true,
+    "created_at": "2026-01-10T08:00:00.000000Z"
+   },
+   {
+    "id": 4243,
+    "uuid": "0188aaaa-0000-0000-0000-000000004243",
+    "name": "Fixture Staging",
+    "organization": "0188bbbb-0000-0000-0000-000000000001",
+    "api_token": "phc_PROJECT_TOKEN_MUST_NOT_LEAK_2",
+    "timezone": "Europe/Berlin",
+    "is_demo": false,
+    "ingested_event": false,
+    "created_at": "2026-02-10T08:00:00.000000Z"
+   },
+   {
+    "id": 4244,
+    "uuid": "0188aaaa-0000-0000-0000-000000004244",
+    "name": "Hedgebox demo",
+    "organization": "0188bbbb-0000-0000-0000-000000000001",
+    "api_token": "phc_x",
+    "timezone": "UTC",
+    "is_demo": true,
+    "ingested_event": true,
+    "created_at": "2026-03-10T08:00:00.000000Z"
+   }
+  ],
+  "event_definitions": [
+   {
+    "id": "0187e000-0000-0000-0000-000000000001",
+    "name": "$pageview",
+    "description": "Page viewed",
+    "tags": [
+     "web"
+    ],
+    "verified": true,
+    "volume_30_day": 5400,
+    "query_usage_30_day": 120,
+    "created_at": "2026-01-10T08:00:00Z",
+    "last_seen_at": "2026-11-03T08:00:00Z",
+    "last_updated_at": null
+   },
+   {
+    "id": "0187e000-0000-0000-0000-000000000002",
+    "name": "$autocapture",
+    "description": null,
+    "tags": [],
+    "verified": false,
+    "volume_30_day": 2100,
+    "query_usage_30_day": 3,
+    "created_at": "2026-01-10T08:00:00Z",
+    "last_seen_at": "2026-11-02T10:00:00Z",
+    "last_updated_at": null
+   },
+   {
+    "id": "0187e000-0000-0000-0000-000000000003",
+    "name": "signed_up",
+    "description": "Account created",
+    "tags": [
+     "growth",
+     "core"
+    ],
+    "verified": true,
+    "volume_30_day": 210,
+    "query_usage_30_day": 44,
+    "created_at": "2026-01-10T08:00:00Z",
+    "last_seen_at": "2026-11-01T12:02:00Z",
+    "last_updated_at": null
+   },
+   {
+    "id": "0187e000-0000-0000-0000-000000000004",
+    "name": "purchase",
+    "description": "Checkout completed",
+    "tags": [
+     "revenue"
+    ],
+    "verified": true,
+    "volume_30_day": 95,
+    "query_usage_30_day": 80,
+    "created_at": "2026-01-10T08:00:00Z",
+    "last_seen_at": "2026-11-03T08:10:00Z",
+    "last_updated_at": null
+   },
+   {
+    "id": "0187e000-0000-0000-0000-000000000005",
+    "name": "legacy_click",
+    "description": null,
+    "tags": [],
+    "verified": false,
+    "volume_30_day": null,
+    "query_usage_30_day": 0,
+    "created_at": "2026-01-10T08:00:00Z",
+    "last_seen_at": "2025-06-01T00:00:00Z",
+    "last_updated_at": null
+   }
+  ],
+  "property_definitions": [
+   {
+    "id": "0187f000-0000-0000-0000-000000000001",
+    "name": "$browser",
+    "type": 1,
+    "group_type_index": null,
+    "property_type": "String",
+    "is_numerical": false,
+    "description": null,
+    "tags": [],
+    "verified": false
+   },
+   {
+    "id": "0187f000-0000-0000-0000-000000000002",
+    "name": "plan",
+    "type": 1,
+    "group_type_index": null,
+    "property_type": "String",
+    "is_numerical": false,
+    "description": null,
+    "tags": [],
+    "verified": false
+   },
+   {
+    "id": "0187f000-0000-0000-0000-000000000003",
+    "name": "amount",
+    "type": 1,
+    "group_type_index": null,
+    "property_type": "Numeric",
+    "is_numerical": true,
+    "description": null,
+    "tags": [],
+    "verified": false
+   },
+   {
+    "id": "0187f000-0000-0000-0000-000000000004",
+    "name": "email",
+    "type": 2,
+    "group_type_index": null,
+    "property_type": "String",
+    "is_numerical": false,
+    "description": null,
+    "tags": [],
+    "verified": false
+   },
+   {
+    "id": "0187f000-0000-0000-0000-000000000005",
+    "name": "seats",
+    "type": 3,
+    "group_type_index": 0,
+    "property_type": "Numeric",
+    "is_numerical": true,
+    "description": null,
+    "tags": [],
+    "verified": false
+   },
+   {
+    "id": "0187f000-0000-0000-0000-000000000006",
+    "name": "$session_duration",
+    "type": 4,
+    "group_type_index": null,
+    "property_type": "Duration",
+    "is_numerical": true,
+    "description": null,
+    "tags": [],
+    "verified": false
+   }
+  ],
+  "cohorts": [
+   {
+    "id": 11,
+    "name": "Pro users",
+    "description": "plan = pro",
+    "is_static": false,
+    "count": 2,
+    "is_calculating": false,
+    "last_calculation": "2026-11-03T09:00:00Z",
+    "errors_calculating": 0,
+    "deleted": false,
+    "created_at": "2026-05-01T00:00:00Z",
+    "created_by": {
+     "id": 1,
+     "email": "ada@example.com",
+     "first_name": "Ada"
+    },
+    "filters": {
+     "properties": {
+      "type": "AND",
+      "values": [
+       {
+        "key": "plan",
+        "value": "pro",
+        "type": "person"
+       }
+      ]
+     }
+    },
+    "query": null
+   },
+   {
+    "id": 12,
+    "name": "Beta testers",
+    "description": "",
+    "is_static": true,
+    "count": 15,
+    "is_calculating": false,
+    "last_calculation": "2026-10-01T09:00:00Z",
+    "errors_calculating": 0,
+    "deleted": false,
+    "created_at": "2026-06-01T00:00:00Z",
+    "created_by": {
+     "id": 2,
+     "email": "grace@example.com"
+    },
+    "filters": {},
+    "query": null
+   },
+   {
+    "id": 13,
+    "name": "Churn risk",
+    "description": null,
+    "is_static": false,
+    "count": null,
+    "is_calculating": true,
+    "last_calculation": null,
+    "errors_calculating": 2,
+    "deleted": false,
+    "created_at": "2026-07-01T00:00:00Z",
+    "created_by": null,
+    "filters": null,
+    "query": {
+     "kind": "HogQLQuery",
+     "query": "SELECT person_id FROM events WHERE event = 'downgrade'"
+    }
+   }
+  ],
+  "feature_flags": [
+   {
+    "id": 21,
+    "key": "new-checkout",
+    "name": "New checkout flow",
+    "active": true,
+    "deleted": false,
+    "filters": {
+     "groups": [
+      {
+       "properties": [
+        {
+         "key": "plan",
+         "value": [
+          "pro"
+         ],
+         "type": "person"
+        }
+       ],
+       "rollout_percentage": 50,
+       "variant": null
+      },
+      {
+       "properties": [],
+       "rollout_percentage": 10,
+       "variant": null
+      }
+     ],
+     "payloads": {
+      "true": "{\"api_secret\": \"sk_live_FIXTURE_PAYLOAD_MUST_NOT_LEAK\"}"
+     }
+    },
+    "rollout_percentage": null,
+    "ensure_experience_continuity": false,
+    "experiment_set": [
+     31
+    ],
+    "tags": [
+     "checkout"
+    ],
+    "created_at": "2026-09-01T00:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    }
+   },
+   {
+    "id": 22,
+    "key": "pricing-test",
+    "name": "Pricing page A/B",
+    "active": true,
+    "deleted": false,
+    "filters": {
+     "groups": [
+      {
+       "properties": [],
+       "rollout_percentage": 100,
+       "variant": null
+      }
+     ],
+     "multivariate": {
+      "variants": [
+       {
+        "key": "control",
+        "name": "Control",
+        "rollout_percentage": 50
+       },
+       {
+        "key": "test",
+        "name": "Cheaper",
+        "rollout_percentage": 50
+       }
+      ]
+     },
+     "payloads": {}
+    },
+    "rollout_percentage": null,
+    "ensure_experience_continuity": true,
+    "experiment_set": [],
+    "tags": [],
+    "created_at": "2026-09-15T00:00:00Z",
+    "created_by": {
+     "email": "grace@example.com"
+    }
+   },
+   {
+    "id": 23,
+    "key": "old-banner",
+    "name": "",
+    "active": false,
+    "deleted": false,
+    "filters": {
+     "groups": [
+      {
+       "properties": [],
+       "rollout_percentage": null
+      }
+     ]
+    },
+    "rollout_percentage": null,
+    "ensure_experience_continuity": false,
+    "experiment_set": null,
+    "tags": null,
+    "created_at": "2025-01-01T00:00:00Z",
+    "created_by": null
+   }
+  ],
+  "experiments": [
+   {
+    "id": 31,
+    "name": "Checkout redesign",
+    "description": "Fewer steps lift conversion",
+    "type": "product",
+    "feature_flag_key": "new-checkout",
+    "start_date": "2026-09-02T00:00:00Z",
+    "end_date": null,
+    "archived": false,
+    "created_at": "2026-09-01T00:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    },
+    "parameters": {
+     "minimum_detectable_effect": 5
+    },
+    "metrics": [
+     {
+      "kind": "ExperimentMetric",
+      "metric_type": "funnel"
+     }
+    ]
+   },
+   {
+    "id": 32,
+    "name": "Hero copy",
+    "description": null,
+    "type": "web",
+    "feature_flag": {
+     "id": 99,
+     "key": "hero-copy"
+    },
+    "start_date": null,
+    "end_date": null,
+    "archived": true,
+    "created_at": "2026-04-01T00:00:00Z",
+    "created_by": null,
+    "parameters": null,
+    "metrics": []
+   }
+  ],
+  "insights": [
+   {
+    "id": 41,
+    "short_id": "aB3dE5",
+    "name": "Weekly signups",
+    "derived_name": "signed_up count",
+    "description": null,
+    "query": {
+     "kind": "InsightVizNode",
+     "source": {
+      "kind": "TrendsQuery",
+      "series": [
+       {
+        "event": "signed_up"
+       }
+      ]
+     }
+    },
+    "dashboards": [
+     51
+    ],
+    "favorited": true,
+    "saved": true,
+    "deleted": false,
+    "tags": [
+     "growth"
+    ],
+    "created_at": "2026-05-01T00:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    },
+    "last_modified_at": "2026-10-01T00:00:00Z"
+   },
+   {
+    "id": 42,
+    "short_id": "fG7hI9",
+    "name": null,
+    "derived_name": "Pageview to purchase",
+    "description": "Main funnel",
+    "query": {
+     "kind": "InsightVizNode",
+     "source": {
+      "kind": "FunnelsQuery"
+     }
+    },
+    "dashboards": [
+     51,
+     52
+    ],
+    "favorited": false,
+    "saved": true,
+    "deleted": false,
+    "tags": [],
+    "created_at": "2026-05-02T00:00:00Z",
+    "created_by": {
+     "email": "grace@example.com"
+    },
+    "last_modified_at": "2026-10-02T00:00:00Z"
+   },
+   {
+    "id": 43,
+    "short_id": "jK1lM2",
+    "name": "Revenue by plan (SQL)",
+    "derived_name": null,
+    "description": null,
+    "query": {
+     "kind": "DataVisualizationNode",
+     "source": {
+      "kind": "HogQLQuery",
+      "query": "SELECT properties.plan, sum(toFloat(properties.amount)) FROM events GROUP BY 1"
+     }
+    },
+    "dashboards": [],
+    "favorited": false,
+    "saved": false,
+    "deleted": false,
+    "tags": null,
+    "created_at": "2026-06-01T00:00:00Z",
+    "created_by": null,
+    "last_modified_at": null
+   }
+  ],
+  "dashboards": [
+   {
+    "id": 51,
+    "name": "Growth",
+    "description": "Signups and activation",
+    "pinned": true,
+    "is_shared": false,
+    "deleted": false,
+    "tags": [
+     "growth"
+    ],
+    "created_at": "2026-05-01T00:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    }
+   },
+   {
+    "id": 52,
+    "name": "Revenue",
+    "description": "",
+    "pinned": false,
+    "is_shared": true,
+    "deleted": false,
+    "tags": [],
+    "created_at": "2026-05-03T00:00:00Z",
+    "created_by": {
+     "email": "grace@example.com"
+    }
+   }
+  ],
+  "annotations": [
+   {
+    "id": 61,
+    "content": "Launched new checkout",
+    "date_marker": "2026-09-02T00:00:00Z",
+    "scope": "project",
+    "creation_type": "USR",
+    "dashboard_item": null,
+    "deleted": false,
+    "created_at": "2026-09-02T01:00:00Z",
+    "updated_at": "2026-09-02T01:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    }
+   },
+   {
+    "id": 62,
+    "content": "Deploy v2.3",
+    "date_marker": "2026-10-15T14:00:00Z",
+    "scope": "dashboard_item",
+    "creation_type": "GIT",
+    "dashboard_item": 41,
+    "deleted": false,
+    "created_at": "2026-10-15T14:01:00Z",
+    "updated_at": "2026-10-15T14:01:00Z",
+    "created_by": null
+   }
+  ],
+  "actions": [
+   {
+    "id": 71,
+    "name": "Clicked buy",
+    "description": "Any buy button",
+    "steps": [
+     {
+      "event": "$autocapture",
+      "selector": "button.buy",
+      "text": "Buy",
+      "url": null,
+      "url_matching": "contains",
+      "href": null,
+      "tag_name": "button",
+      "properties": []
+     },
+     {
+      "event": "purchase",
+      "url": null,
+      "url_matching": null,
+      "selector": null,
+      "text": null,
+      "href": null
+     }
+    ],
+    "tags": [
+     "revenue"
+    ],
+    "deleted": false,
+    "created_at": "2026-05-05T00:00:00Z",
+    "created_by": {
+     "email": "ada@example.com"
+    }
+   },
+   {
+    "id": 72,
+    "name": "Viewed pricing",
+    "description": null,
+    "steps": [
+     {
+      "event": "$pageview",
+      "url": "/pricing",
+      "url_matching": "contains"
+     }
+    ],
+    "tags": [],
+    "deleted": false,
+    "created_at": "2026-05-06T00:00:00Z",
+    "created_by": null
+   }
+  ],
+  "surveys": [
+   {
+    "id": "0191c000-0000-0000-0000-000000000081",
+    "name": "NPS",
+    "description": "Quarterly NPS",
+    "type": "popover",
+    "linked_flag": {
+     "id": 21,
+     "key": "new-checkout"
+    },
+    "questions": [
+     {
+      "type": "rating",
+      "question": "How likely are you to recommend us?",
+      "scale": 10
+     },
+     {
+      "type": "open",
+      "question": "Why?"
+     }
+    ],
+    "start_date": "2026-10-01T00:00:00Z",
+    "end_date": null,
+    "archived": false,
+    "created_at": "2026-09-25T00:00:00Z",
+    "created_by": {
+     "email": "grace@example.com"
+    }
+   },
+   {
+    "id": "0191c000-0000-0000-0000-000000000082",
+    "name": "Exit survey",
+    "description": "",
+    "type": "api",
+    "linked_flag": null,
+    "questions": [
+     {
+      "type": "single_choice",
+      "question": "Why are you leaving?",
+      "choices": [
+       "Price",
+       "Features"
+      ]
+     }
+    ],
+    "start_date": null,
+    "end_date": null,
+    "archived": false,
+    "created_at": "2026-10-20T00:00:00Z",
+    "created_by": null
+   }
+  ],
+  "groups_types": [
+   {
+    "group_type": "company",
+    "group_type_index": 0,
+    "name_singular": "Company",
+    "name_plural": "Companies"
+   },
+   {
+    "group_type": "team",
+    "group_type_index": 1,
+    "name_singular": null,
+    "name_plural": null
+   }
+  ]
+ }
+}

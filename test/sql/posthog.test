@@ -1,0 +1,287 @@
+# name: test/sql/posthog.test
+# description: PostHog tables and hogql() through DuckDB, against the HogQL-evaluating mock (test/mock_api)
+# group: [posthog]
+
+require vgi
+
+require-env POSTHOG_WORKER
+
+require-env POSTHOG_MOCK_API
+
+statement ok
+LOAD json;
+
+statement ok
+ATTACH 'posthog' (TYPE vgi, LOCATION '{POSTHOG_WORKER}');
+
+# No secret yet: a clear error naming CREATE SECRET.
+statement error
+SELECT count(*) FROM posthog.main.events;
+----
+<REGEX>:.*CREATE SECRET.*
+
+# PAGE_SIZE 4 forces several keyset pages over the 12 fixture events.
+statement ok
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_fixture_key', PROJECT_ID '4242', HOST '{POSTHOG_MOCK_API}', PAGE_SIZE 4);
+
+# ------------------------------------------------------------------ events
+
+# Every event exactly once across pages, including three that share a timestamp.
+query III
+SELECT count(*), count(DISTINCT uuid), count(DISTINCT timestamp) FROM posthog.main.events;
+----
+12	12	10
+
+query TTTTT
+SELECT uuid, event, timestamp, distinct_id, person_id FROM posthog.main.events WHERE timestamp = TIMESTAMPTZ '2026-11-02 10:00:00+00' ORDER BY uuid;
+----
+0193a000-0000-7000-8000-000000000007	purchase	2026-11-02 10:00:00+00	user-1	01890000-0000-7000-8000-000000000001
+0193a000-0000-7000-8000-000000000008	$pageview	2026-11-02 10:00:00+00	user-1	01890000-0000-7000-8000-000000000001
+0193a000-0000-7000-8000-000000000009	$autocapture	2026-11-02 10:00:00+00	user-1	01890000-0000-7000-8000-000000000001
+
+query TI
+SELECT event, count(*) AS n FROM posthog.main.events WHERE timestamp >= TIMESTAMPTZ '2026-11-01 00:00:00+00' AND timestamp < TIMESTAMPTZ '2026-11-02 00:00:00+00' GROUP BY event ORDER BY event;
+----
+$autocapture	1
+$pageview	3
+signed_up	2
+
+# session_id / current_url come from $session_id / $current_url; a quote in a value is just data.
+query TTT
+SELECT event, session_id, current_url FROM posthog.main.events WHERE distinct_id = 'user-3' ORDER BY timestamp;
+----
+$pageview	0192d000-0000-7000-8000-000000000004	https://shop.example/blog/o'reilly
+purchase	0192d000-0000-7000-8000-000000000004	https://shop.example/checkout
+
+query I
+SELECT count(*) FROM posthog.main.events WHERE session_id IS NULL;
+----
+1
+
+# JSON property filters are applied by DuckDB (properties is a JSON column).
+query IR
+SELECT count(*), sum((properties->>'amount')::DOUBLE) FROM posthog.main.events WHERE event = 'purchase' AND properties->>'plan' = 'pro';
+----
+2	148.0
+
+query TT
+SELECT typeof(properties), typeof(timestamp) FROM posthog.main.events LIMIT 1;
+----
+JSON	TIMESTAMP WITH TIME ZONE
+
+# A value that looks like HogQL injection matches only itself.
+query T
+SELECT uuid FROM posthog.main.events WHERE current_url = 'https://shop.example/blog/o''reilly';
+----
+0193a000-0000-7000-8000-000000000011
+
+query I
+SELECT count(*) FROM posthog.main.events WHERE distinct_id = 'x'' OR 1=1 --';
+----
+0
+
+# Top-N: ORDER BY + LIMIT (offset included) is answered from one HogQL query.
+query TT
+SELECT uuid, event FROM posthog.main.events ORDER BY timestamp DESC LIMIT 2 OFFSET 1;
+----
+0193a000-0000-7000-8000-000000000011	$pageview
+0193a000-0000-7000-8000-000000000010	purchase
+
+# ------------------------------------------------------------------ events_where
+
+query IR
+SELECT count(*), sum((properties->>'amount')::DOUBLE) FROM posthog.main.events_where(event := 'purchase', properties := '{"plan": "pro"}');
+----
+2	148.0
+
+# The injection-looking property value is a plain string match.
+query T
+SELECT distinct_id FROM posthog.main.events_where(properties := '{"plan": "pro'' OR 1=1 --"}');
+----
+user-3
+
+# Numbers and booleans compare as text, the way HogQL reads properties; null means missing.
+query T
+SELECT uuid FROM posthog.main.events_where(properties := '{"amount": 49}');
+----
+0193a000-0000-7000-8000-000000000007
+
+query T
+SELECT distinct_id FROM posthog.main.events_where(properties := '{"is_trial": true}');
+----
+user-1
+
+query I
+SELECT count(*) FROM posthog.main.events_where(event := '$pageview', properties := '{"$browser": null}');
+----
+0
+
+query T
+SELECT distinct_id FROM posthog.main.events_where(properties := '{"utm source": "newsletter"}');
+----
+user-1
+
+# The latest N, newest first, over more than one page.
+query TT
+SELECT uuid, event FROM posthog.main.events_where(max_rows := 5, newest_first := true) ORDER BY timestamp DESC, uuid DESC;
+----
+0193a000-0000-7000-8000-000000000012	purchase
+0193a000-0000-7000-8000-000000000011	$pageview
+0193a000-0000-7000-8000-000000000010	purchase
+0193a000-0000-7000-8000-000000000009	$autocapture
+0193a000-0000-7000-8000-000000000008	$pageview
+
+query I
+SELECT count(*) FROM posthog.main.events_where(distinct_id := 'user-1', after := TIMESTAMPTZ '2026-11-02 00:00:00+00', before := TIMESTAMPTZ '2026-11-02 10:00:00.000001+00');
+----
+3
+
+query I
+SELECT count(*) FROM posthog.main.events_where(person_id := '01890000-0000-7000-8000-000000000002');
+----
+3
+
+statement error
+SELECT * FROM posthog.main.events_where(properties := '[1, 2]');
+----
+<REGEX>:.*JSON object.*
+
+statement error
+SELECT * FROM posthog.main.events_where(properties := '{"a`b": 1}');
+----
+<REGEX>:.*cannot be used in a HogQL identifier.*
+
+# ------------------------------------------------------------------ persons, ids, sessions, groups
+
+query TTT
+SELECT id, is_identified, properties->>'email' FROM posthog.main.persons ORDER BY created_at;
+----
+01890000-0000-7000-8000-000000000001	true	ada@example.com
+01890000-0000-7000-8000-000000000002	true	grace@example.com
+01890000-0000-7000-8000-000000000003	false	NULL
+
+query TT
+SELECT person_id, list(distinct_id ORDER BY distinct_id)::VARCHAR FROM posthog.main.person_distinct_ids GROUP BY person_id HAVING count(*) > 1;
+----
+01890000-0000-7000-8000-000000000001	[anon-1, user-1]
+
+# Joining events to persons.
+query TI
+SELECT p.properties->>'email' AS email, count(*) FROM posthog.main.events e JOIN posthog.main.persons p ON p.id = e.person_id WHERE e.event = 'purchase' GROUP BY email ORDER BY email NULLS LAST;
+----
+ada@example.com	1
+grace@example.com	1
+NULL	1
+
+query TIIT
+SELECT channel_type, count(*), sum(duration_seconds), bool_or(is_bounce) FROM posthog.main.sessions WHERE start_timestamp >= TIMESTAMPTZ '2026-11-01 00:00:00+00' GROUP BY channel_type ORDER BY channel_type;
+----
+Direct	2	120	true
+Email	1	60	false
+Organic Search	1	600	false
+
+query TT
+SELECT session_id, entry_utm_source FROM posthog.main.sessions WHERE entry_utm_source IS NOT NULL;
+----
+0192d000-0000-7000-8000-000000000001	newsletter
+
+query ITI
+SELECT group_type_index, group_key, (properties->>'seats')::INT FROM posthog.main.groups WHERE group_type_index = 0 ORDER BY group_key;
+----
+0	acme	40
+0	globex	12
+
+query T
+SELECT typeof(group_type_index) FROM posthog.main.groups LIMIT 1;
+----
+INTEGER
+
+# ------------------------------------------------------------------ hogql()
+
+query TI
+SELECT * FROM posthog.main.hogql('SELECT event, count() AS n FROM events WHERE event = {ev} GROUP BY event', values := '{"ev": "purchase"}');
+----
+purchase	3
+
+# Placeholder values are data, never HogQL.
+query I
+SELECT count(*) FROM posthog.main.hogql('SELECT uuid FROM events WHERE distinct_id = {d}', values := '{"d": "x'' OR 1=1 --"}');
+----
+0
+
+# Projection and WHERE run inside the wrapper; max_rows caps the result.
+query T
+SELECT event FROM posthog.main.hogql('SELECT event, distinct_id, timestamp FROM events') WHERE distinct_id = 'user-2' AND timestamp > TIMESTAMPTZ '2026-11-01 12:01:00+00' ORDER BY event;
+----
+purchase
+signed_up
+
+query I
+SELECT count(*) FROM posthog.main.hogql('SELECT uuid FROM events', max_rows := 5);
+----
+5
+
+# max_rows := 0 sends the query verbatim, so PostHog's own LIMIT rules apply.
+query I
+SELECT count(*) FROM posthog.main.hogql('SELECT uuid FROM events LIMIT 3', max_rows := 0);
+----
+3
+
+# Asynchronous execution is polled until complete.
+query I
+SELECT n FROM posthog.main.hogql('SELECT count() AS n FROM events', refresh := 'force_async');
+----
+12
+
+# ClickHouse types map to DuckDB types (replayed response with nested and wide types).
+query TTTTTTTTTTTT
+SELECT typeof(tags), typeof(attrs), typeof(pair), typeof(amount), typeof(happened_at), typeof(day), typeof(flag), typeof(n), typeof(ratio), typeof(lc), typeof(maybe), typeof(uid) FROM posthog.main.hogql('SELECT * FROM fixture_types') LIMIT 1;
+----
+VARCHAR[]	MAP(VARCHAR, VARCHAR)	STRUCT("label" VARCHAR, rank UTINYINT)	DECIMAL(18,4)	TIMESTAMP WITH TIME ZONE	DATE	BOOLEAN	UBIGINT	DOUBLE	VARCHAR	BIGINT	VARCHAR
+
+query TTTTTTI
+SELECT tags::VARCHAR, attrs['k'], pair.label, amount, happened_at, n, maybe FROM posthog.main.hogql('SELECT * FROM fixture_types') ORDER BY day;
+----
+[a, b]	v	first	12.5000	2026-11-02 14:30:00.25+00	18446744073709551615	NULL
+[]	NULL	second	-0.0001	NULL	7	42
+
+# Filters on the result columns are pushed into the wrapper too.
+query T
+SELECT lc FROM posthog.main.hogql('SELECT * FROM fixture_types') WHERE flag;
+----
+web
+
+statement error
+SELECT * FROM posthog.main.hogql('SELECT event FROM events', values := 'not json');
+----
+<REGEX>:.*values must be a JSON object.*
+
+statement error
+SELECT * FROM posthog.main.hogql('SELECT event FROM events', values := '{"vgi_p0": 1}');
+----
+<REGEX>:.*reserved.*
+
+# PostHog refuses OFFSET for API queries; the error surfaces with its HTTP status.
+statement error
+SELECT * FROM posthog.main.hogql('SELECT event FROM events LIMIT 1 OFFSET 2', max_rows := 0);
+----
+<REGEX>:.*HTTP 400.*OFFSET.*
+
+statement error
+SELECT * FROM posthog.main.hogql('SELECT event FROM events', refresh := 'sometimes');
+----
+<REGEX>:.*
+
+# ------------------------------------------------------------------ clickhouse_type_to_duckdb (offline)
+
+query TT
+SELECT t, posthog.main.clickhouse_type_to_duckdb(t) FROM (VALUES ('Nullable(String)'), ('DateTime64(6, ''UTC'')'), ('Array(UInt8)'), ('Decimal(18, 4)'), ('Map(String, Array(Int64))'), ('Tuple(label String, rank UInt8)'), ('Enum8(''a'' = 1)'), (NULL)) AS v(t) ORDER BY t NULLS LAST;
+----
+Array(UInt8)	UTINYINT[]
+DateTime64(6, 'UTC')	TIMESTAMP WITH TIME ZONE
+Decimal(18, 4)	DECIMAL(18,4)
+Enum8('a' = 1)	VARCHAR
+Map(String, Array(Int64))	MAP(VARCHAR, BIGINT[])
+Nullable(String)	VARCHAR
+Tuple(label String, rank UInt8)	STRUCT("label" VARCHAR, "rank" UTINYINT)
+NULL	NULL

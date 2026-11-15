@@ -1,314 +1,247 @@
-<!-- managed-by: vgi-starters (edit upstream in shared/README.md.tmpl, then run tools/render.py) -->
 <p align="center">
   <img src="https://query.farm/media-kit/products/vgi/vgi-logo.png" alt="Vector Gateway Interface (VGI)" width="320">
 </p>
 
-<p align="center"><em>A Query.Farm VGI worker for DuckDB, written in Python.</em></p>
+# Query PostHog Events, Persons, Sessions and HogQL in DuckDB
 
-# VGI Starter Worker — Python
+> **vgi-posthog** · a [Query.Farm](https://query.farm) VGI worker
 
-[![CI](https://github.com/Query-farm/vgi-starter-python/actions/workflows/ci.yml/badge.svg)](https://github.com/Query-farm/vgi-starter-python/actions/workflows/ci.yml)
+[![CI](https://github.com/Query-farm/vgi-posthog/actions/workflows/ci.yml/badge.svg)](https://github.com/Query-farm/vgi-posthog/actions/workflows/ci.yml)
 [![vgi worker: query.farm](https://query.farm/media-kit/shields/vgi-worker.svg)](https://query.farm)
 
-[VGI](https://query.farm/vgi) lets DuckDB call functions that live in a separate
-process: your code, in any language, exposed as ordinary SQL. This worker adds
-three example functions that you rename and replace with your own:
+[PostHog](https://posthog.com) product analytics as SQL. Run any HogQL query through PostHog's
+[Query API](https://posthog.com/docs/api/queries) and get typed DuckDB columns back; read events,
+persons, sessions and groups with your `WHERE` clause translated into HogQL; and list feature flags,
+experiments, surveys, insights, dashboards, cohorts and definitions. Works with **US Cloud**,
+**EU Cloud** and **self-hosted** PostHog.
 
-| Function | Kind | Shows you how to |
-|---|---|---|
-| `greet(name)` / `greet(name, style)` | scalar | vectorize over a column, overload, constrain a constant |
-| `sequence_table(count, step := 1)` | table | stream rows in batches, take named arguments |
-| `fetch_items(base_url, page_size := 100)` | table | page through a REST API, retry, read a secret |
-
-<!-- template-only:start -->
-## Use this template
-
-This repository is a **template**. Click **Use this template** on GitHub, or:
-
-```bash
-gh repo create my-org/weather-worker --template Query-farm/vgi-starter-python --private --clone
-cd weather-worker
-make init NAME=weather     # renames catalog, package, binary, env vars; removes this section
-make check                 # lint + tests over every transport + metadata score
+```sql
+-- Which pages did pro-plan users view last week, and how often?
+SELECT current_url, count(*) AS views
+FROM posthog.main.events_where(event := '$pageview', properties := '{"plan": "pro"}',
+                               after := TIMESTAMPTZ '2026-11-08', before := TIMESTAMPTZ '2026-11-15')
+GROUP BY current_url ORDER BY views DESC LIMIT 10;
 ```
 
-Prefer to work with an AI coding agent? `make init` first, then hand it
-[AGENTS.md](AGENTS.md). See [Using with coding agents](#using-with-coding-agents).
-
-Starters exist for [Python](https://github.com/Query-farm/vgi-starter-python),
-[TypeScript](https://github.com/Query-farm/vgi-starter-typescript),
-[Go](https://github.com/Query-farm/vgi-starter-go),
-[Rust](https://github.com/Query-farm/vgi-starter-rust),
-[Java](https://github.com/Query-farm/vgi-starter-java) and
-[C#](https://github.com/Query-farm/vgi-starter-csharp). They are generated from
-[Query-farm/vgi-starters](https://github.com/Query-farm/vgi-starters); send
-changes there.
-<!-- template-only:end -->
+The event name, the property filter and the date range all run inside PostHog as HogQL.
 
 ## Quick start
 
-**Prerequisites:** Python 3.13+ and [uv](https://docs.astral.sh/uv/) (it runs the SQL
-test runner and the metadata checker).
+**Prerequisites:** [uv](https://docs.astral.sh/uv/) and DuckDB 2.0 or [Haybarn](https://query.farm/products/haybarn) 2.0.
 
-```bash
-make build
-```
-
-Then open DuckDB 2.0 or [Haybarn](https://query.farm/products/haybarn) and attach the
-worker. `LOCATION` is the command DuckDB runs to start it; use an absolute path,
-because a relative one resolves against DuckDB's working directory.
-
-**DuckDB 2.0:**
+The worker is installed straight from this repository (it is not published to PyPI). `LOCATION`
+is the command DuckDB runs to start it:
 
 ```sql
+-- DuckDB 2.0
 SET allow_extension_repositories = 'allowed';
 CREATE EXTENSION REPOSITORY IF NOT EXISTS query_farm WITH PREFIX 'https://duckdb-extensions.query.farm';
 INSTALL vgi FROM query_farm;
 LOAD vgi FROM query_farm;
-ATTACH 'starter' (TYPE vgi, LOCATION '/abs/path/to/vgi-starter-python/.venv/bin/vgi-starter-worker');
+-- Haybarn 2.0: INSTALL vgi FROM community; LOAD vgi;
+
+ATTACH 'posthog' (TYPE vgi,
+  LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-posthog@v0.1.0 vgi-posthog-worker');
 ```
 
-**Haybarn 2.0** (`uvx haybarn-cli`):
+From a checkout, `make build` and use `LOCATION '/abs/path/to/vgi-posthog/.venv/bin/vgi-posthog-worker'`.
+
+## Credentials
+
+Create a **personal API key** in PostHog (Settings → Personal API keys, starts with `phx_`) with read
+access to *Query* and the resources you want to list, then a DuckDB secret **after** `ATTACH`:
 
 ```sql
-INSTALL vgi FROM community;
-LOAD vgi;
-ATTACH 'starter' (TYPE vgi, LOCATION '/abs/path/to/vgi-starter-python/.venv/bin/vgi-starter-worker');
+-- US Cloud (default HOST https://us.posthog.com)
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_...', PROJECT_ID '12345');
+
+-- EU Cloud
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_...', PROJECT_ID '12345', HOST 'https://eu.posthog.com');
+
+-- Self-hosted
+CREATE SECRET ph (TYPE posthog, PERSONAL_API_KEY 'phx_...', PROJECT_ID '1', HOST 'https://posthog.example.com');
 ```
 
-Now call the functions:
+| Field | Required | Meaning |
+|---|---|---|
+| `PERSONAL_API_KEY` | yes | Personal API key (`phx_...`), sent as a bearer token. Not the `phc_` project key. Redacted in `duckdb_secrets()`. |
+| `PROJECT_ID` | for everything but `metadata.projects` | Numeric project (environment) id. `SELECT id, name FROM posthog.metadata.projects` lists them. |
+| `HOST` | no | PostHog app URL. Default `https://us.posthog.com`. |
+| `PAGE_SIZE` | no | Rows per HogQL page for the typed tables, 1–50,000 (default 10,000). |
+| `TIMEOUT` | no | Per-request timeout in seconds (default 60). |
+| `MAX_WAIT` | no | How long to poll an asynchronous query, in seconds (default 300). |
 
-```sql
-SELECT starter.main.greet('Ada');                         -- Hi, Ada!
-SELECT starter.main.greet('Ada', 'formal');               -- Good day, Ada.
-SELECT * FROM starter.main.sequence_table(5, step := 2) ORDER BY n;
-```
+The key is read from the secret on every call. It never enters table-function state, logs or
+query text, and it is only ever sent to `HOST`: REST `next` links that point at another host are
+rebased onto `HOST` before they are followed.
 
-`fetch_items` pages through a REST API. Try it against the public demo API (25 fixed items):
+## What's inside
 
-```sql
-SELECT category, count(*) AS items, round(avg(price), 2) AS avg_price
-FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1')
-GROUP BY category ORDER BY category;
-```
+### `posthog.main`: analytics data through HogQL
 
-If an older cached extension misbehaves, refresh it with `FORCE INSTALL vgi FROM query_farm;`
-(DuckDB) or `FORCE INSTALL vgi FROM community;` (Haybarn).
-
-## Using it in a pipeline
-
-Worker functions compose with everything else in DuckDB:
-
-```sql
--- Materialize an API into a local table.
-CREATE TABLE items AS SELECT * FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1');
-
--- Join it with local files.
-SELECT i.name, i.price, s.units
-FROM items i JOIN 'sales.parquet' s ON s.item_id = i.id;
-
--- Call a scalar per row of another table.
-SELECT customer, starter.main.greet(customer, 'formal') FROM read_csv('customers.csv');
-```
-
-## Project layout
-
-```
-src/starter_worker/
-  worker.py        # assembles the catalog; add new functions to FUNCTIONS
-  meta.py          # catalog/schema metadata + helpers (object_tags, column)
-  greet.py         # scalar example (overloads, ConstParam choices)
-  sequence.py      # table function example (named args, streaming state)
-  fetch_items.py   # REST API table function (pagination, retries, secrets)
-tests/             # pytest unit tests (in-process client)
-test/sql/          # sqllogictest files run through DuckDB
-test/mock_api/     # offline mock of the REST API used by tests
-examples/          # recipes: pushdown, caching, catalog tables, aggregates, COPY …
-ci/                # integration harness used by `make test-sql` and CI
-scripts/           # vgi_template.py (init / template-diff)
-vgi-agent-tests.yaml  # private graders for the agent test tasks
-```
-
-## Adding a function
-
-1. Create `src/starter_worker/<name>.py`. Copy the closest example: `greet.py` for a
-   scalar, `sequence.py` for a generator, `fetch_items.py` for an API.
-2. Declare arguments with `Annotated[..., Param(...)]`/`ConstParam(...)` (scalars) or a
-   frozen dataclass of `Annotated[..., Arg(...)]` (table functions). Use `Arg(0, ...)`
-   for positional arguments and `Arg("name", default=...)` for named ones.
-3. Give the class a `class Meta` with `name`, `description`, `tags=object_tags(...)`
-   and `examples`.
-4. Add the class to `FUNCTIONS` in `src/starter_worker/worker.py`.
-
-**Which kind of function?**
-
-| You want to… | Use |
+| Object | What it returns |
 |---|---|
-| compute one value per input row | a **scalar** function |
-| return a set of rows from arguments (an API, a file, a generator) | a **table** function |
-| transform or aggregate the rows of a query | a **table in-out** function or an **aggregate** |
-| expose a fixed dataset by name (`SELECT * FROM starter.main.t`) | a **catalog table** |
-| write data out to a file or service | `COPY … TO` with a copy function |
-| accept `INSERT` / `UPDATE` / `DELETE` | a catalog table with insert/update/delete functions |
+| `hogql(query, values := NULL, max_rows := 50000, refresh := 'blocking')` | Any HogQL `SELECT`, with columns typed from the response's ClickHouse types |
+| `events` | `uuid`, `event`, `timestamp`, `distinct_id`, `person_id`, `session_id`, `current_url`, `properties` (JSON), `elements_chain`, `created_at` |
+| `events_where(event, properties, distinct_id, person_id, after, before, max_rows, newest_first)` | Events filtered in HogQL, including JSON property equality, with an optional row cap |
+| `persons` | `id`, `created_at`, `is_identified`, `properties` (JSON) |
+| `person_distinct_ids` | `distinct_id`, `person_id` |
+| `sessions` | `session_id`, start/end timestamps, `duration_seconds`, entry/exit URLs, UTM fields, `channel_type`, `pageview_count`, `autocapture_count`, `is_bounce` |
+| `groups` | `group_type_index`, `group_key`, `created_at`, `properties` (JSON) |
+| `clickhouse_type_to_duckdb(type)` | The DuckDB type `hogql()` gives a ClickHouse type (runs offline) |
 
-The [examples/](examples/) folder has a recipe for most of these. Writable tables have no
-recipe:
+### `posthog.metadata`: project resources through REST
 
-A writable table is a catalog `Table` that names a table in-out function per operation in
-`insert_function`, `update_function` and `delete_function`, with the richest result each one
-produces in `write_result_modes`. The helpers in `vgi.write_results` (`write_options`,
-`write_result_schema`, `write_result_batch`, `row_id_field`) read DuckDB's `write_options`
-argument and build the result. UPDATE and DELETE need a scan function that emits
-`row_id_field()` and declares projection pushdown. Transactions: override `attach_supports_transactions`
-and `catalog_transaction_begin` / `_commit` / `_rollback` on the catalog. Since VGI protocol 3.3
-a table's scan and write functions are table-only: hidden from `duckdb_functions()` and not
-callable from SQL. Set `expose_scan=True` on the table to keep the scan callable as an ordinary
-table function too (write functions never are). See
-[Writable tables](https://github.com/Query-farm/vgi-python/blob/main/docs/catalog-interface.md#writable-tables)
-in the vgi-python docs.
+`projects`, `group_types`, `event_definitions`, `property_definitions`, `actions` (match steps as
+`LIST(STRUCT)`), `cohorts`, `feature_flags` (variants and release conditions with rollout
+percentages), `experiments`, `surveys`, `insights` (definitions and query kind, not cached results),
+`dashboards` and `annotations`.
 
-## Secrets and configuration
+Nothing secret is exposed: `projects` has no project API token column, and `feature_flags` reports
+only `has_payloads`, never the payloads (teams often keep configuration values in them).
 
-`fetch_items` shows the recommended pattern. A bearer token comes from a DuckDB secret
-when one exists, and from an environment variable otherwise:
+### HogQL
 
 ```sql
-CREATE SECRET (TYPE starter_api, TOKEN 'your-token');      -- per session, never logged
+-- Constants go in `values` and are referenced as {name}: never quote them into the query.
+SELECT * FROM posthog.main.hogql(
+  'SELECT properties.$browser AS browser, count() AS users
+   FROM events WHERE event = {ev} AND timestamp >= {since} GROUP BY browser',
+  values := '{"ev": "$pageview", "since": "2026-11-01"}')
+ORDER BY users DESC;
 ```
 
-```bash
-STARTER_API_TOKEN=your-token make run-http                # for servers and containers
+At bind time the worker sends `SELECT * FROM (<query>) LIMIT 0` to learn the columns and their
+ClickHouse types (`String` → `VARCHAR`, `DateTime64` → `TIMESTAMPTZ`, `UInt64` → `UBIGINT`,
+`Array(T)` → `T[]`, `Map(K, V)` → `MAP`, `Tuple(...)` → `STRUCT`, `Decimal(p, s)` → `DECIMAL`, anything
+else → `VARCHAR`). It then sends
+
+```
+SELECT <columns DuckDB needs> FROM (<query>) WHERE <pushed predicates> [ORDER BY <col> LIMIT n] LIMIT <max_rows>
 ```
 
-Try it: the demo API's `/v1/auth` endpoint needs the published token `demo-token`.
+so projections, simple predicates on the result and a Top-N run in PostHog. Columns whose names are
+not plain identifiers (an un-aliased `count()`) are read with `*`; alias computed columns.
+`max_rows := 0` sends the query verbatim, with no wrapper. `refresh := 'async'` or `'force_async'`
+lets PostHog run the query asynchronously; the worker polls
+`GET /api/projects/:id/query/:query_id/` until it completes (up to `MAX_WAIT`).
+
+## Pushdown
+
+DuckDB hands the worker each table's simple predicates; the worker renders them as HogQL with every
+constant in the Query API's `values` map (`{vgi_p0}`, `{vgi_p1}` ...), so no SQL value is ever spliced
+into HogQL text. Identifiers are emitted only if they are plain or quote-safe; anything else simply
+isn't pushed. Every pushed predicate is re-checked on the returned rows, so a predicate that can't be
+translated still holds.
+
+| Table | Pushed into the HogQL `WHERE` | Notes |
+|---|---|---|
+| `events` | `=`, `<>`, `<`, `<=`, `>`, `>=`, `IN`, `IS [NOT] NULL` and AND/OR of them on `event`, `timestamp`, `created_at`, `distinct_id`, `person_id`, `uuid`, `session_id` (`properties.$session_id`), `current_url` (`properties.$current_url`), `elements_chain` | Always bound `timestamp`. |
+| `persons` | `id`, `created_at`, `is_identified` | |
+| `person_distinct_ids` | `distinct_id`, `person_id` | |
+| `sessions` | every column (`$start_timestamp`, `$channel_type`, `$is_bounce` ...) | |
+| `groups` | `group_type_index` (`index`), `group_key` (`key`), `created_at` | |
+| `events_where()` | its arguments, including `properties.<key> = {value}` for each JSON property | |
+| `hogql()` | predicates on its result columns, wrapped around the query | |
+
+- **Projection**: only the columns the query needs (plus the paging key) are selected.
+- **Top-N**: `ORDER BY <column> [DESC] LIMIT n [OFFSET m]` on a table *with no `WHERE`* becomes one
+  HogQL `ORDER BY ... LIMIT n+m` query. DuckDB only passes the limit to the scan when there is no
+  filter; for a filtered "latest N", use `events_where(..., max_rows := N, newest_first := true)`.
+- **Not pushed from SQL**: predicates on the JSON `properties` columns (`properties->>'plan' = 'pro'`)
+  — DuckDB does not hand those to table scans. They still work, applied after reading; use
+  `events_where(properties := '{"plan": "pro"}')` to push them.
+
+## Limits and pagination
+
+- PostHog returns at most **50,000 rows per HogQL query** (100 when the query has no `LIMIT`) and
+  rejects `OFFSET` for personal API keys. The typed tables therefore page with a **keyset cursor**:
+  `events` orders by `(timestamp, uuid)` and asks for `timestamp > t OR (timestamp = t AND uuid > u)`,
+  `persons` pages by `id`, `sessions` by `session_id`, `groups` by `(index, key)`. The cursor travels in
+  the scan state, so a long scan resumes on any worker process over the HTTP transport.
+- `hogql()` is one request, capped at `max_rows` (≤ 50,000). Aggregate in HogQL, or read large row sets
+  through `events`.
+- PostHog rate-limits each project (240 queries a minute, 2,400 an hour, 3 concurrent, plus an hourly
+  read budget). The worker retries HTTP 429 and 502/503/504 with backoff, honouring `Retry-After`.
+  The query API is not an export path: for bulk history use PostHog's batch exports.
+- REST listings page with DRF `limit`/`offset` and `next` links (100 per request).
+
+## Examples
 
 ```sql
-SELECT count(*) FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1/auth');   -- fails: HTTP 401
-CREATE SECRET (TYPE starter_api, TOKEN 'demo-token');
-SELECT count(*) FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1/auth');   -- 25
-```
+-- Daily active users this month
+SELECT date_trunc('day', timestamp) AS day, count(DISTINCT person_id) AS dau
+FROM posthog.main.events
+WHERE timestamp >= TIMESTAMPTZ '2026-11-01' AND event = '$pageview'
+GROUP BY day ORDER BY day;
 
-Never bake credentials into the image or the source. If a function can't run without
-real credentials, its examples can't execute in CI either. Set `execute: false` on the
-metadata check for that worker (see `.github/workflows/ci.yml`), and add
-`LINT_ARGS ?= --no-execute` to the Makefile so local runs match.
+-- Bounce rate by channel
+SELECT channel_type, avg(is_bounce::INT) AS bounce_rate, median(duration_seconds) AS median_s
+FROM posthog.main.sessions WHERE start_timestamp >= TIMESTAMPTZ '2026-11-01'
+GROUP BY channel_type ORDER BY bounce_rate DESC;
+
+-- Purchases per person email
+SELECT p.properties->>'email' AS email, count(*) AS purchases
+FROM posthog.main.events e JOIN posthog.main.persons p ON p.id = e.person_id
+WHERE e.event = 'purchase' AND e.timestamp >= TIMESTAMPTZ '2026-11-01'
+GROUP BY email ORDER BY purchases DESC;
+
+-- Feature flags rolled out to less than 100%, one row per release condition
+SELECT f.key, c.rollout_percentage, c.properties
+FROM posthog.metadata.feature_flags f, unnest(f.conditions) AS u(c)
+WHERE f.active AND coalesce(c.rollout_percentage, 100) < 100;
+
+-- Insights on each dashboard
+SELECT d.name, count(*) AS insights
+FROM posthog.metadata.insights i, unnest(i.dashboard_ids) AS u(dashboard_id)
+JOIN posthog.metadata.dashboards d ON d.id = u.dashboard_id GROUP BY d.name;
+```
 
 ## Testing
 
 ```bash
-make test-unit                 # fast Python unit tests
-make test-sql                  # test/sql/*.test through DuckDB (stdio)
+make test-unit                 # unit tests: type mapping, HogQL building, pushdown, client
+make test-sql                  # test/sql/*.test through Haybarn (stdio)
 make test-sql TRANSPORT=http   # …over HTTP (also: launch)
 make check                     # everything CI runs
 ```
 
-`test/sql/*.test` files are [sqllogictest](https://duckdb.org/docs/stable/dev/sqllogictest/intro)
-scripts. `ci/run-integration.sh` runs them against your worker and fails on any
-unexpected skip, so a broken transport can't hide behind a green run.
-`fetch_items` is tested against `test/mock_api/server.py` so tests are fast and
-offline.
-
-**Testing against real data:** put live tests in their own `.test` file that starts with
-`require-env STARTER_LIVE`. They run only when that variable is set. Add the skip reason
-to `EXPECTED_SKIP_REASONS` in CI.
+PostHog is far too heavy to self-host in CI, so the tests run against `test/mock_api/server.py`, a
+stdlib-only stand-in for the Query API and REST endpoints built from PostHog's documented shapes and
+the fixture project in `test/fixtures/posthog.json` (regenerate with `python3 test/fixtures/generate.py`).
+It **evaluates** the HogQL the worker sends: the worker's HogQL subset is rewritten to SQLite and run
+against the fixture tables, so a wrong pushdown returns wrong rows. It also behaves like PostHog where
+it matters: default 100-row limit, 50,000-row cap, HTTP 400 on `OFFSET`, `query_status` polling for
+async queries, a 429 with `Retry-After` on the first request to every path, `next` links on a foreign
+host, and a request log (`GET /__requests`) that `test/sql/pushdown.test` reads to assert the exact
+HogQL and placeholder values. No network or credentials are needed.
 
 ## Metadata and the quality score
 
-DuckDB, agents and documentation tools discover your functions through their metadata:
-titles, descriptions, argument docs, examples and keywords.
-[vgi-lint](https://github.com/Query-farm/vgi-lint-check) checks it, and CI runs it on
-every push. Its settings live in `vgi-lint.toml`, which `make lint-explain`,
-`vgi-lint lint`, and CI all read. This template scores 100/100 with no findings.
-
-```bash
-make lint-explain                              # findings, each with its fix
-make lint-explain LINT_ARGS="--format agent"   # the same, grouped for coding agents
-make lint-ai                                   # optional: an agent must solve vgi-agent-tests.yaml
-```
-
-Each report also states an **assurance level**: how much was actually verified.
-
-| Level | Reached when | Here |
-|---|---|---|
-| L1 structural | the static metadata is clean | workers that need real credentials (`execute: false` in CI) |
-| L2 behavioural | the examples also run and return what they claim | **the CI gate** |
-| L3 semantic | an agent solves the worker's own test tasks, and the docs are reviewed | `make lint-ai`, before publishing |
-
-- **How strict.** Your copy fails on warnings (`fail_on = "warning"` in `vgi-lint.toml`).
-  Raise it to `"info"` before you publish the worker for others.
-- **The linter isn't pinned.** It tracks the current quality bar, so a new rule can flag
-  metadata that passed yesterday. Fix it, or waive the finding.
-- **Waivers.** If a finding is genuinely wrong for your worker, waive it in
-  `vgi-lint.toml` with a `kind` and a `reason`.
-- **Existing workers.** If you're adding this gate to a worker that already has
-  findings, record them with `vgi-lint lint --baseline vgi-lint-baseline --update-baseline`
-  and set `baseline` in `vgi-lint.toml`. After that, only new findings fail.
-
-Metadata lives in `src/starter_worker/meta.py` and each function's `class Meta`.
+[vgi-lint](https://github.com/Query-farm/vgi-lint-check) checks the worker's metadata; settings live
+in `vgi-lint.toml` (gate: `fail_on = "info"`, 100/100 with zero findings). Every table and function
+needs a `posthog` secret, so CI runs the check with `execute: false`; the SQL suite covers behaviour
+against the mock. `vgi-agent-tests.yaml` holds the graders for `make lint-ai`, written against the
+fixture project.
 
 ## Logging and debugging
 
-stdout carries the Arrow protocol, so **never print to stdout**. Log to stderr instead.
-Use the standard `logging` module (the SDK routes it to stderr); `--debug` or `--log-level DEBUG` turns it up.
-
-- Under DuckDB (stdio/launch), worker stderr shows up in DuckDB's error messages and
-  terminal.
-- In Docker it goes to `docker logs`.
-- `make debug` runs one query against the worker with debug logging on.
+stdout carries the Arrow protocol, so the worker logs to stderr. `--debug` logs every HogQL query
+(with placeholder names, never values or the key).
 
 ## Deploying
 
-The same binary serves stdio (DuckDB starts it locally) or HTTP (you host it):
-
-```bash
-docker build -t weather-worker .
-docker run -p 8000:8000 -e STARTER_API_TOKEN=... weather-worker   # health: GET /health
-```
-
-```sql
-ATTACH 'starter' (TYPE vgi, LOCATION 'https://workers.example.com/starter');
-```
-
-Put hosted workers behind TLS and authentication. See
-[authentication](https://query.farm/vgi/authentication) for bearer tokens and JWTs, and
-[distributing a worker](https://query.farm/vgi/distributing-a-worker) for packaging.
-Pass secrets with `-e` or your platform's secret manager.
-
-## Releasing
-
-Push a tag like `v0.1.0`. The release workflow builds the wheel and sdist, attaches them to the GitHub release, and (if you set the repository variable `PYPI_PUBLISH=true` and configure PyPI Trusted Publishing) publishes to PyPI, so users can run `uvx vgi-starter-worker`. Without PyPI, users install straight from the repo with `uvx --from git+https://github.com/Query-farm/vgi-starter-python@v0.1.0 vgi-starter-worker`. Every artifact is signed with cosign and
-carries SLSA build provenance. `ci/check-version.sh` makes sure the tag matches the
-version in `pyproject.toml`.
-
-## Using with coding agents
-
-[AGENTS.md](AGENTS.md) is written for AI coding agents (Claude Code reads it via
-`CLAUDE.md`; Codex, Cursor and others read it directly). It covers the commands, the
-recipe for adding a function, the metadata checklist and the sharp edges. A good first
-prompt:
-
-> Read AGENTS.md. Replace `fetch_items` with `forecast(lat DOUBLE, lon DOUBLE)` that calls
-> the Open-Meteo API. Include full metadata, a mock-server test and a `STARTER_LIVE` test.
-> You're done when `make check` passes.
-
-## Keeping up with the template
-
-`make template-diff` shows what changed upstream (CI, docs, examples) since your copy was
-made. Your copy records its template version in `.vgi-starter.json`.
-
-## Learn more
-
-- [What is VGI?](https://query.farm/vgi) · [Getting started](https://query.farm/vgi/getting-started) · [Building a worker](https://query.farm/vgi/building-a-worker)
-- [Python SDK docs](https://query.farm/vgi/docs/python/): [scalar tutorial](https://query.farm/vgi/docs/python/tutorial/scalar/), [table tutorial](https://query.farm/vgi/docs/python/tutorial/table/)
-- [Distributing a worker](https://query.farm/vgi/distributing-a-worker) · [Choosing a language](https://query.farm/vgi/languages) · [llms.txt](https://query.farm/vgi/llms.txt)
-- SDK source: [vgi-python](https://github.com/Query-farm/vgi-python) · RPC layer: [https://vgi-rpc-python.query.farm](https://vgi-rpc-python.query.farm)
+The same worker serves stdio (DuckDB starts it) or HTTP (`vgi-posthog-worker --http --port 8000`, or
+the Dockerfile). Credentials still come from the DuckDB secret of each session, never from the
+server's environment.
 
 ## Support
 
-Open an issue on this repository. For VGI itself, see [query.farm](https://query.farm).
+Open an issue at <https://github.com/Query-farm/vgi-posthog/issues>.
 
-## Authorship & license
+## Authorship & License
 
-The starter template is written by [Query.Farm](https://query.farm) and released under
-the [BSD Zero Clause License](LICENSE) (0BSD). Use it for anything, with no attribution
-required. Replace this section with your own license once the code is yours.
+Copyright 2026 Query Farm LLC - https://query.farm
+
+Released under the [BSD Zero Clause License](LICENSE) (0BSD). PostHog is a trademark of PostHog Inc.;
+this worker is an independent project that uses PostHog's public API.

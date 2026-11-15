@@ -21,15 +21,21 @@ Faster loops while iterating: `make test-unit`, `make test-sql`, `make lint-expl
 ## Layout
 
 ```
-src/starter_worker/
+src/posthog_worker/
   worker.py        # assembles the catalog; add new functions to FUNCTIONS
   meta.py          # catalog/schema metadata + helpers (object_tags, column)
-  greet.py         # scalar example (overloads, ConstParam choices)
-  sequence.py      # table function example (named args, streaming state)
-  fetch_items.py   # REST API table function (pagination, retries, secrets)
-tests/             # pytest unit tests (in-process client)
+  client.py        # posthog secret, HTTP + retries, Query API (HogQL) with async polling
+  hogql.py         # placeholders, identifier quoting, ClickHouse -> Arrow types, value conversion
+  pushdown.py      # DuckDB pushed predicates -> HogQL WHERE (placeholders only)
+  scan.py          # HogQL-backed table base: keyset pagination, Top-N
+  tables.py        # events, persons, person_distinct_ids, sessions, groups, events_where()
+  query_fn.py      # hogql(query, ...)
+  rest.py          # metadata schema: REST list endpoints
+  typemap_fn.py    # clickhouse_type_to_duckdb() scalar
+tests/             # pytest unit tests
 test/sql/          # sqllogictest files run through DuckDB
-test/mock_api/     # offline mock of the REST API used by tests
+test/mock_api/     # HogQL-evaluating PostHog stand-in (Query API + REST) used by tests
+test/fixtures/     # posthog.json fixture project + generate.py
 examples/          # recipes: pushdown, caching, catalog tables, aggregates, COPY …
 ci/                # integration harness used by `make test-sql` and CI
 scripts/           # vgi_template.py (init / template-diff)
@@ -38,26 +44,26 @@ vgi-agent-tests.yaml  # private graders for the agent test tasks
 
 ## Recipe: add a function
 
-1. Create `src/starter_worker/<name>.py`. Copy the closest example: `greet.py` for a
-   scalar, `sequence.py` for a generator, `fetch_items.py` for an API.
+1. Create `src/posthog_worker/<name>.py`. Copy the closest example: `typemap_fn.py` for a
+   scalar, a `tables.py` scan (subclass `HogQLScan`) for HogQL data, a `rest.py` scan for a REST list.
 2. Declare arguments with `Annotated[..., Param(...)]`/`ConstParam(...)` (scalars) or a
    frozen dataclass of `Annotated[..., Arg(...)]` (table functions). Use `Arg(0, ...)`
    for positional arguments and `Arg("name", default=...)` for named ones.
 3. Give the class a `class Meta` with `name`, `description`, `tags=object_tags(...)`
    and `examples`.
-4. Add the class to `FUNCTIONS` in `src/starter_worker/worker.py`.
+4. Add the class to `FUNCTIONS` in `src/posthog_worker/worker.py`.
 
 Then, for every new function:
 
-1. **Metadata** (`src/starter_worker/meta.py` and each function's `class Meta`): title, category from the schema's category list,
+1. **Metadata** (`src/posthog_worker/meta.py` and each function's `class Meta`): title, category from the schema's category list,
    keywords, `doc_llm` (for agents: what it does, arguments, when to use it) and `doc_md`
    (for humans). Describe each argument, and for table functions describe the result
    columns. Add 1–2 `examples` with fully qualified, analytical SQL
-   (`starter.main.fn(...)`): project, filter or aggregate rather than `SELECT *`.
+   (`posthog.main.fn(...)`): project, filter or aggregate rather than `SELECT *`.
 2. **Executable examples:** if the function is deterministic and needs no network,
    add an `executable_examples` entry with `ORDER BY` and an `expected_result`.
-3. **SQL test:** add cases to `test/sql/starter.test`, or a new `test/sql/<name>.test`
-   with the same header (`require vgi`, `require-env STARTER_WORKER`, then `ATTACH`).
+3. **SQL test:** add cases to `test/sql/posthog.test`, or a new `test/sql/<name>.test`
+   with the same header (`require vgi`, `require-env POSTHOG_WORKER`, then `ATTACH`).
    Avoid expected-error text that depends on SDK wording; use `<REGEX>:.*` for errors you
    don't control.
 4. **Unit test** for any non-trivial logic.
@@ -130,8 +136,8 @@ in the vgi-python docs.
 - **State must be serializable.** Table-function state (`initial_state`/`process`) must subclass `ArrowSerializableDataclass`. Over HTTP each batch can be served by a different process, so the cursor travels with the request. Keep it small, and never put secrets in it.
 - **Examples must be deterministic.** Add `ORDER BY`, and no `now()`, random values or
   network. Examples that hit a live API go in `examples`, not `executable_examples`.
-- **Credentials.** Read them from a DuckDB secret first (`CREATE SECRET (TYPE starter_api, …)`),
-  then from an environment variable. Never put them in logs, examples or the repo, and
+- **Credentials.** Read them from the DuckDB secret (`CREATE SECRET (TYPE posthog, …)`) only;
+  this worker never reads environment variables. Never put them in logs, examples or the repo, and
   keep them out of table-function state unless the state rule above says
   the SDK encrypts it. Workers that need real credentials set `execute: false` on the metadata check.
 - **Errors.** Raise errors with a clear message. For HTTP failures, include the status
@@ -160,7 +166,6 @@ in the vgi-python docs.
 ## Useful prompts
 
 - "Add a scalar `slugify(text VARCHAR) -> VARCHAR` with full metadata and tests."
-- "Replace `fetch_items` with a table function for <API>. Map its JSON to typed columns,
-  read the token from a `starter_api` secret, and add mock-server tests."
+- "Add a `persons_where(properties := ...)` table function mirroring `events_where`, with mock tests."
 - "Add a catalog table `countries` (code, name) with a primary key, following
   `examples/catalog_tables`."
