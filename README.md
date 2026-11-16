@@ -41,7 +41,7 @@ LOAD vgi FROM query_farm;
 -- Haybarn 2.0: INSTALL vgi FROM community; LOAD vgi;
 
 ATTACH 'posthog' (TYPE vgi,
-  LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-posthog@v0.1.0 vgi-posthog-worker');
+  LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-posthog@v0.1.1 vgi-posthog-worker');
 ```
 
 From a checkout, `make build` and use `LOCATION '/abs/path/to/vgi-posthog/.venv/bin/vgi-posthog-worker'`.
