@@ -375,12 +375,12 @@ def convert(value: Any, type_: pa.DataType) -> Any:
     if pa.types.is_integer(type_):
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
     if pa.types.is_floating(type_):
         try:
             return float(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
     if pa.types.is_decimal(type_):
         try:

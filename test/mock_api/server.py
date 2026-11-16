@@ -121,7 +121,7 @@ def _prop(props: str | None, key: str) -> str | None:
         return None
     try:
         value = json.loads(props).get(key)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return None
     if value is None:
         return None
