@@ -32,6 +32,8 @@ The event name, the property filter and the date range all run inside PostHog as
 The worker is installed straight from this repository (it is not published to PyPI). `LOCATION`
 is the command DuckDB runs to start it:
 
+vgi-posthog 0.2.0 speaks VGI protocol 3.4, so it needs Haybarn 2.0.1 or newer (Haybarn 2.0.0 loads a 3.3 `vgi` extension that cannot attach it).
+
 ```sql
 -- DuckDB 2.0
 SET allow_extension_repositories = 'allowed';
@@ -41,7 +43,7 @@ LOAD vgi FROM query_farm;
 -- Haybarn 2.0: INSTALL vgi FROM community; LOAD vgi;
 
 ATTACH 'posthog' (TYPE vgi,
-  LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-posthog@v0.1.1 vgi-posthog-worker');
+  LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-posthog@v0.2.0 vgi-posthog-worker');
 ```
 
 From a checkout, `make build` and use `LOCATION '/abs/path/to/vgi-posthog/.venv/bin/vgi-posthog-worker'`.
